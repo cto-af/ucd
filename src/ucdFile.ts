@@ -28,7 +28,7 @@ export class UCDFile {
   public fields: (FieldDef | undefined)[] = [];
   public entries: Entry[] = [];
 
-  public [Symbol.iterator](): () => ArrayIterator<Entry> {
-    return this.entries[Symbol.iterator];
+  public [Symbol.iterator](): ArrayIterator<Entry> {
+    return this.entries[Symbol.iterator]();
   }
 }

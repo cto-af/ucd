@@ -1,6 +1,5 @@
 {{
-// Use ../lib to make sure peggy --test will work
-import {UCDFile} from './ucdFile.js';
+import {UCDFile} from './ucdFile.ts';
 
 const IGNORED = new Set([
   ' ',
@@ -104,7 +103,7 @@ entry
 
 
 fields
-  = (_ @field)|1.., SEMI _|
+  = (_ @field)|2.., SEMI _|
 
 field
   = first:point ".." last:point _ &SEMI { return {range: [first, last]} }

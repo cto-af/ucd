@@ -5,8 +5,7 @@ export interface FileState {
   // See: https://bz.apache.org/bugzilla/show_bug.cgi?id=39727
   etag: string; // HTTP etag, with "-gzip" removed
   date: string; // HTTP date
-  version: string;
-  lastUpdate: Date; // Last time we checked the server.
+  lastUpdate?: Date; // Last time we checked the server.
 }
 
 export interface State {
@@ -58,11 +57,10 @@ export class Database {
     if (this.#file) {
       try {
         const txt = await fs.readFile(this.#file, 'utf8');
-        this.#state = JSON.parse(txt);
-        for (const f of Object.values(this.#state.files)) {
-          f.lastUpdate = new Date(f.lastUpdate);
-        }
-        this.#state.lastUpdate = new Date(this.#state.lastUpdate);
+        this.#state = JSON.parse(txt, (k, v) => {
+          return (k === 'lastUpdate') ? new Date(v) : v;
+        });
+        this.#state.lastUpdate ??= FIRST_DATE;
       } catch (e) {
         if (!errCode(e, 'ENOENT')) {
           throw e;

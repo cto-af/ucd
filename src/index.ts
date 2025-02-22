@@ -3,6 +3,7 @@ import * as path from 'node:path';
 import {Buffer} from 'node:buffer';
 import {Database} from './db.js';
 import type {PathLike} from 'node:fs';
+import {UCDFile} from './ucdFile.js';
 import {errCode} from './errno.js';
 import {fileURLToPath} from 'node:url';
 import {parse as ucdParse} from './ucd.js';
@@ -24,6 +25,7 @@ export interface UCDoptions {
   cacheDir?: PathLike;
   prefix?: string;
   validMS?: number;
+  verbose?: boolean;
 }
 
 interface RequiredUCDoptions {
@@ -31,10 +33,7 @@ interface RequiredUCDoptions {
   cacheDir: string;
   prefix: string;
   validMS: number;
-}
-
-export interface UCDfile extends UCDoptions {
-  name: string;
+  verbose: boolean;
 }
 
 export interface UCDversion {
@@ -65,6 +64,7 @@ export class CacheDir {
       alwaysCheck: false,
       prefix: UCD_PREFIX,
       validMS: VALID_MS,
+      verbose: false,
       ...options,
       cacheDir: normalizeCacheDir(options.cacheDir),
     };
@@ -73,11 +73,10 @@ export class CacheDir {
 
   public static async create(options: UCDoptions = {}): Promise<CacheDir> {
     const cd = new CacheDir(options);
-    await cd.init();
-    return cd;
+    return cd.init();
   }
 
-  public async init(): Promise<void> {
+  public async init(): Promise<this> {
     try {
       const stats = await fs.stat(this.#opts.cacheDir);
       if (!stats.isDirectory()) {
@@ -91,7 +90,8 @@ export class CacheDir {
       }
     }
     await fs.access(this.#opts.cacheDir);
-    this.#db.init();
+    await this.#db.init();
+    return this;
   }
 
   public rmDir(): Promise<void> {
@@ -112,34 +112,87 @@ export class CacheDir {
     };
   }
 
-  public async parse(name: string): Promise<UCDfile> {
+  public async parse(name: string): Promise<UCDFile> {
     const txt = await this.#getFile(name);
     return ucdParse(txt);
   }
 
+  /**
+   * If the file is in the database, and we've checked in the last 30 days,
+   * use the local copy.
+   * Otherwise, check to see if it's changed.  If not, use the local copy.
+   * Otherwise, get a new copy.
+   *
+   * @param name
+   * @returns
+   */
   async #getFile(name: string): Promise<string> {
     const u = new URL(name, this.#opts.prefix);
-    const file = await this.#db.getFile(name);
-    const init: RequestInit = {
-    };
-    if (file?.date) {
-      init.headers = {'if-modified-since': file.date};
+    let file = await this.#db.getFile(name);
+    let useLocal = Boolean(file);
+    if (file) {
+      if (!this.#validDate(file.lastUpdate)) {
+        useLocal = false;
+      }
     }
-    if (this.#opts.alwaysCheck) {
-      init.cache = 'no-cache';
+
+    if (!useLocal) {
+      const init: RequestInit = {
+      };
+      if (file?.date) {
+        init.headers = {'if-modified-since': file.date};
+      }
+      if (this.#opts.alwaysCheck) {
+        init.cache = 'no-cache';
+      }
+      this.#verbose('Checking "%s"', u);
+      const res = await fetch(u, init);
+      file = {
+        etag: res.headers.get('etag') ?? '---000---',
+        date: res.headers.get('last-modified') ?? new Date().toUTCString(),
+      };
+
+      if (res.status === 304) {
+        await this.#db.setFile(name, file);
+        return this.#getLocal(name);
+      }
+
+      if (res.status === 200) {
+        const txt = await res.text();
+        await this.#setLocal(name, txt);
+        await this.#db.setFile(name, file);
+        return txt;
+      }
+
+      this.#verbose('Invalid HTTP status: %d', res.status);
     }
-    const res = await fetch(u, init);
-    if (res.status === 200) {
-      return res.text();
-    }
-    if (res.status === 304) {
-      return this.#getLocal(name);
-    }
-    throw new Error(`Invalid response code: ${res.status}`);
+
+    return this.#getLocal(name);
   }
 
-  async #getLocal(name: string): Promise<string> {
-    const cacheFile = path.join(this.#opts.cacheDir, name);
-    return fs.readFile(cacheFile, 'utf8');
+  #fileName(name: string): string {
+    return path.join(this.#opts.cacheDir, name);
+  }
+
+  #getLocal(name: string): Promise<string> {
+    return fs.readFile(this.#fileName(name), 'utf8');
+  }
+
+  #setLocal(name: string, text: string): Promise<void> {
+    return fs.writeFile(this.#fileName(name), text, 'utf8');
+  }
+
+  #validDate(d?: Date): boolean {
+    if (this.#opts.alwaysCheck || !d) {
+      return false;
+    }
+    const dt = d.getTime() + this.#opts.validMS;
+    return dt > new Date().getTime();
+  }
+
+  #verbose(...args: any[]): void {
+    if (this.#opts.verbose) {
+      console.log(...args);
+    }
   }
 }

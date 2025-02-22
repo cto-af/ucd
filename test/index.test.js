@@ -6,6 +6,7 @@ import fs from 'node:fs/promises';
 import {hostLocal} from 'hostlocal';
 import {once} from 'node:events';
 import tls from 'node:tls';
+import {tmpdir} from 'node:os';
 
 const root = fileURLToPath(new URL('../tools/ucd', import.meta.url));
 const server = await hostLocal(root, {
@@ -19,6 +20,8 @@ const prefix = (await new Promise((resolve, reject) => {
   server.on('listen', resolve);
   server.start();
 })).toString();
+
+const cacheDir = await fs.mkdtemp(tmpdir(), 'ucd-index-');
 
 before(async t => {
   // Trust our own CA.
@@ -38,11 +41,12 @@ after(async t => {
   server.close();
   await closer;
   t.mock.reset();
+  await fs.rm(tmp, {recursive: true});
 });
 
 test('version', async() => {
-  const cd = new CacheDir({
-    cacheDir: new URL('cache', import.meta.url),
+  const cd = await CacheDir.create({
+    cacheDir,
     prefix,
   });
   const ver = await cd.fetchUCDversion();
