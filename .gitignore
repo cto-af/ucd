@@ -7,3 +7,4 @@ src/ucd.d.ts
 src/ucd.js
 test/ucd/
 tools/ucd/
+tsconfig.tsbuildinfo

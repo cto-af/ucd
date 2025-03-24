@@ -178,8 +178,18 @@ export class CacheDir {
     return fs.readFile(this.#fileName(name), 'utf8');
   }
 
-  #setLocal(name: string, text: string): Promise<void> {
-    return fs.writeFile(this.#fileName(name), text, 'utf8');
+  async #setLocal(name: string, text: string): Promise<void> {
+    const fn = this.#fileName(name);
+    const dir = path.dirname(fn);
+    try {
+      await fs.mkdir(dir);
+    } catch (e) {
+      if (!errCode(e, 'EEXIST')) {
+        throw e;
+      }
+    }
+
+    return fs.writeFile(fn, text, 'utf8');
   }
 
   #validDate(d?: Date): boolean {
@@ -192,7 +202,8 @@ export class CacheDir {
 
   #verbose(...args: any[]): void {
     if (this.#opts.verbose) {
-      console.log(...args);
+      // eslint-disable-next-line no-console
+      console.error(...args);
     }
   }
 }

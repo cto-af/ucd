@@ -14,9 +14,11 @@ after(async() => {
 });
 
 function rmLU(f) {
+  // eslint-disable-next-line no-unused-vars
   const {lastUpdate, ...rest} = f;
   return rest;
 }
+
 test('in-memory', async() => {
   const db = new Database();
   assert.ok(db);

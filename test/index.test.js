@@ -4,6 +4,7 @@ import assert from 'node:assert';
 import {fileURLToPath} from 'node:url';
 import fs from 'node:fs/promises';
 import {hostLocal} from 'hostlocal';
+import {join} from 'node:path';
 import {once} from 'node:events';
 import tls from 'node:tls';
 import {tmpdir} from 'node:os';
@@ -21,7 +22,7 @@ const prefix = (await new Promise((resolve, reject) => {
   server.start();
 })).toString();
 
-const cacheDir = await fs.mkdtemp(tmpdir(), 'ucd-index-');
+const cacheDir = await fs.mkdtemp(join(tmpdir(), 'ucd-index-'));
 
 before(async t => {
   // Trust our own CA.
@@ -41,7 +42,7 @@ after(async t => {
   server.close();
   await closer;
   t.mock.reset();
-  await fs.rm(tmp, {recursive: true});
+  await fs.rm(cacheDir, {recursive: true});
 });
 
 test('version', async() => {

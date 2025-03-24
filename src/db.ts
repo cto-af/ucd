@@ -57,9 +57,10 @@ export class Database {
     if (this.#file) {
       try {
         const txt = await fs.readFile(this.#file, 'utf8');
-        this.#state = JSON.parse(txt, (k, v) => {
-          return (k === 'lastUpdate') ? new Date(v) : v;
-        });
+        this.#state = JSON.parse(
+          txt,
+          (k, v) => ((k === 'lastUpdate') ? new Date(v) : v)
+        );
         this.#state.lastUpdate ??= FIRST_DATE;
       } catch (e) {
         if (!errCode(e, 'ENOENT')) {

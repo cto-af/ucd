@@ -49,19 +49,12 @@ field_def
     results.fields[num] = description;
   }
   / "#" _ "field"i? _ num:decimal_int COLON _ description:description {
-    results.fields[num] = description;
-  }
-  / "#" _ "Property:"i _ word:word {
-    results.fields[0] = {word: 'points'}
-    results.fields[1] = {word};
+    results.fields[num - 1] = description;
   }
 
 description
-  = description:$(!EOL .)* {
+  = description:to_end {
     const words = description.split(/\b/);
-    if (words.length < 1) {
-      return undefined;
-    }
     return {
       word: words.find(w => w.includes('_')) || words.find(w => !IGNORED.has(w.toLowerCase())),
       description,
@@ -79,13 +72,37 @@ word
   = $[^ <>\t\r\n]+
 
 comment
-  = "#" _ @$(!EOL .)*
+  = "#" _ @to_end
+
+to_end
+  = $(!EOL .)*
 
 entries
   = entry+
 
 entry
-  = "@" word:word CEOL {
+  = "#" _ derived:("Derived" _)? "Property:"i _ property:word _ comment:to_end {
+    const res = {
+      fields: [],
+      property,
+      derived: Boolean(derived)
+    };
+    if (comment) {
+      res.comment = comment;
+    }
+    results.entries.push(res);
+  }
+  / "#" _ "@missing:" _ fields:fields comment:CEOL {
+    const res = {fields, missing: true};
+    if (comment) {
+      res.comment = comment;
+    }
+    if (segment) {
+      res.segment = segment;
+    }
+    results.entries.push(res);
+  }
+  / "@" word:word CEOL {
     segment = word;
   }
   / fields:fields comment:CEOL {
