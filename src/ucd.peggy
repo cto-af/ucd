@@ -1,5 +1,5 @@
 {{
-import {UCDFile} from './ucdFile.ts';
+import {UCDFile} from '../lib/ucdFile.js';
 
 const IGNORED = new Set([
   ' ',
@@ -128,7 +128,6 @@ field
       const res = {points};
       if (prefix) {
         res.prefix = prefix;
-        console.error(res)
       }
       return res;
     }

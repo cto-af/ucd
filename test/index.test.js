@@ -1,7 +1,9 @@
 import {after, before, test} from 'node:test';
+import {fileURLToPath, pathToFileURL} from 'node:url';
+import {Buffer} from 'node:buffer';
 import {CacheDir} from '../lib/index.js';
 import assert from 'node:assert';
-import {fileURLToPath} from 'node:url';
+import {createCA} from '@cto.af/ca';
 import fs from 'node:fs/promises';
 import {hostLocal} from 'hostlocal';
 import {join} from 'node:path';
@@ -26,14 +28,11 @@ const cacheDir = await fs.mkdtemp(join(tmpdir(), 'ucd-index-'));
 
 before(async t => {
   // Trust our own CA.
-  const CA = await fs.readFile(
-    new URL('../.cert/_CA.cert.pem', import.meta.url),
-    'utf8'
-  );
+  const {cert} = await createCA({noKey: true});
   const origCsC = tls.createSecureContext;
   t.mock.method(tls, 'createSecureContext', options => {
     const res = origCsC(options);
-    res.context.addCACert(CA);
+    res.context.addCACert(cert);
     return res;
   });
 });
@@ -45,15 +44,74 @@ after(async t => {
   await fs.rm(cacheDir, {recursive: true});
 });
 
+test('create', async() => {
+  await assert.doesNotReject(() => CacheDir.create());
+  await assert.doesNotReject(() => CacheDir.create({
+    cacheDir: null, verbose: true,
+  }));
+  const cd = await CacheDir.create({
+    cacheDir: join(cacheDir, 'TEMP', 'DEEP'),
+  });
+  await cd.rmDir();
+
+  await assert.rejects(() => CacheDir.create({cacheDir: 0}));
+  await assert.rejects(() => CacheDir.create({
+    cacheDir: new URL(import.meta.url)
+  }));
+});
+
 test('version', async() => {
   const cd = await CacheDir.create({
     cacheDir,
     prefix,
   });
   const ver = await cd.fetchUCDversion();
+  delete ver.lastModified;
+  delete ver.etag;
 
   assert.deepEqual(ver, {
     version: '15.1.0',
     date: new Date('2023-08-28'),
   });
+
+  const badCd = await CacheDir.create({
+    cacheDir: join(cacheDir, 'BAD'),
+    prefix: `${prefix}BAD_DIR/`,
+  });
+
+  await assert.rejects(() => badCd.fetchUCDversion({CI: true}));
+  await assert.rejects(() => badCd.fetchUCDversion());
+
+  const invalidCd = await CacheDir.create({
+    cacheDir: join(cacheDir, 'BAD'),
+    prefix: `${prefix}bad/`,
+  });
+  await assert.rejects(() => invalidCd.fetchUCDversion());
+});
+
+test('Buffer cacheDir', async() => {
+  const cd = await CacheDir.create({
+    cacheDir: Buffer.from(cacheDir),
+    prefix,
+  });
+  assert(cd);
+});
+
+test('NormalizationCorrections', async() => {
+  const cd = await CacheDir.create({
+    cacheDir: pathToFileURL(cacheDir),
+    prefix,
+  });
+  assert(cd);
+  const res = await cd.parse('NormalizationCorrections.txt');
+  assert(res);
+  const res2 = await cd.parse('NormalizationCorrections.txt', {
+    lastModified: res.lastModified,
+    etag: res.etag,
+  });
+  assert.equal(res2.status, 304);
+  const res3 = await cd.parse('NormalizationCorrections.txt', {
+    CI: true,
+  });
+  assert.equal(res3.status, 304);
 });

@@ -8,3 +8,4 @@ src/ucd.js
 test/ucd/
 tools/ucd/
 tsconfig.tsbuildinfo
+docs/

@@ -1,44 +1,87 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
+import type {CodePoints, Entry, Field, FieldDef, Points, Range, UCDFile} from './ucdFile.js';
+import {type Logger, getLog} from '@cto.af/log';
 import {Buffer} from 'node:buffer';
-import {Database} from './db.js';
 import type {PathLike} from 'node:fs';
-import {UCDFile} from './ucdFile.js';
-import {errCode} from './errno.js';
+import assert from 'node:assert';
+import {errCode} from '@cto.af/utils';
 import {fileURLToPath} from 'node:url';
 import {parse as ucdParse} from './ucd.js';
 
 const UCD_PREFIX = 'https://www.unicode.org/Public/UCD/latest/ucd/';
-const DB_NAME = 'db.json';
-const VALID_DAYS = 30;
-const VALID_MS = VALID_DAYS * 24 * 60 * 60 * 1000;
+const BAD_ETAG = '---000---';
+
+export type {
+  CodePoints,
+  Entry,
+  Field,
+  FieldDef,
+  Points, Range,
+  UCDFile,
+};
 
 /*
 Goals:
 - Unicode version bump
 - Cache files locally, as needed
-- Maintain list of etags per file so we can do if-none-match queries
 */
 
 export interface UCDoptions {
-  alwaysCheck?: boolean;
   cacheDir?: PathLike;
   prefix?: string;
-  validMS?: number;
   verbose?: boolean;
+  checkinCI?: boolean;
 }
 
 interface RequiredUCDoptions {
-  alwaysCheck: boolean;
-  cacheDir: string;
+  cacheDir: string; // Normalized from PathLike
   prefix: string;
-  validMS: number;
   verbose: boolean;
+  checkinCI: boolean;
 }
+
+const DEFAULT_UCD_OPTIONS: RequiredUCDoptions = {
+  cacheDir: process.cwd(),
+  prefix: UCD_PREFIX,
+  verbose: false,
+  checkinCI: false,
+};
 
 export interface UCDversion {
   date: Date;
   version: string;
+  lastModified: string;
+  etag: string;
+}
+
+export interface FileInfo {
+  etag: string;
+  lastModified: string;
+  status: number;
+  text: string | undefined;
+  parsed: UCDFile | undefined;
+}
+
+export interface FetchOptions {
+  etag?: string;
+  lastModified?: string;
+  CI?: boolean;
+}
+
+function isCI(opts?: FetchOptions): boolean {
+  const {env} = process;
+  return Boolean(
+    // Override for testing, so we don't have to much with process.env
+    opts?.CI ||
+    // Travis CI, CircleCI, Cirrus CI, Gitlab CI, Appveyor, CodeShip, dsari,
+    // GitHub Actions
+    env.CI ||
+    env.CONTINUOUS_INTEGRATION || // Travis CI, Cirrus CI
+    env.BUILD_NUMBER || // Jenkins, TeamCity
+    env.RUN_ID || // TaskCluster, dsari
+    false
+  );
 }
 
 function normalizeCacheDir(cacheDir?: PathLike): string {
@@ -57,18 +100,17 @@ function normalizeCacheDir(cacheDir?: PathLike): string {
 
 export class CacheDir {
   #opts: RequiredUCDoptions;
-  #db: Database;
+  #log: Logger;
 
   private constructor(options: UCDoptions = {}) {
     this.#opts = {
-      alwaysCheck: false,
-      prefix: UCD_PREFIX,
-      validMS: VALID_MS,
-      verbose: false,
+      ...DEFAULT_UCD_OPTIONS,
       ...options,
       cacheDir: normalizeCacheDir(options.cacheDir),
     };
-    this.#db = new Database(path.join(this.#opts.cacheDir, DB_NAME));
+    this.#log = getLog({
+      logLevel: this.#opts.verbose ? 1 : 0,
+    });
   }
 
   public static async create(options: UCDoptions = {}): Promise<CacheDir> {
@@ -90,7 +132,6 @@ export class CacheDir {
       }
     }
     await fs.access(this.#opts.cacheDir);
-    await this.#db.init();
     return this;
   }
 
@@ -98,23 +139,29 @@ export class CacheDir {
     return fs.rm(this.#opts.cacheDir, {recursive: true});
   }
 
-  public async fetchUCDversion(): Promise<UCDversion> {
-    const readme = await this.#getFile('ReadMe.txt');
+  public async fetchUCDversion(opts?: FetchOptions): Promise<UCDversion> {
+    const {text, lastModified, etag} = await this.#getFile('ReadMe.txt', opts);
+    assert(text);
 
-    const matchD = readme.match(/^# Date: (?<date>\d+-\d+-\d+)/m);
-    const matchV = readme.match(/Version (?<version>\d+\.\d+\.\d+) of/i);
+    const matchD = text.match(/^# Date: (?<date>\d+-\d+-\d+)/m);
+    const matchV = text.match(/Version (?<version>\d+\.\d+\.\d+) of/i);
     if (!matchD?.groups || !matchV?.groups) {
       throw new Error('Invalid ReadMe');
     }
     return {
       date: new Date(matchD.groups.date),
       version: matchV.groups.version,
+      lastModified,
+      etag,
     };
   }
 
-  public async parse(name: string): Promise<UCDFile> {
-    const txt = await this.#getFile(name);
-    return ucdParse(txt);
+  public async parse(name: string, opts?: FetchOptions): Promise<FileInfo> {
+    const info = await this.#getFile(name, opts);
+    if ((info.status === 200) && (typeof info.text === 'string')) {
+      info.parsed = ucdParse(info.text);
+    }
+    return info;
   }
 
   /**
@@ -124,50 +171,58 @@ export class CacheDir {
    * Otherwise, get a new copy.
    *
    * @param name
+   * @param lastModified If supplied, the value of the last-modified header
+   *   from the previous request.
    * @returns
    */
-  async #getFile(name: string): Promise<string> {
+  async #getFile(
+    name: string,
+    opts?: FetchOptions
+  ): Promise<FileInfo> {
+    if (isCI(opts) && !this.#opts.checkinCI) {
+      const text = await this.#getLocal(name);
+      return {
+        etag: opts?.etag ?? BAD_ETAG,
+        lastModified: opts?.lastModified ?? new Date().toUTCString(),
+        status: 304,
+        text,
+        parsed: undefined,
+      };
+    }
     const u = new URL(name, this.#opts.prefix);
-    let file = await this.#db.getFile(name);
-    let useLocal = Boolean(file);
-    if (file) {
-      if (!this.#validDate(file.lastUpdate)) {
-        useLocal = false;
-      }
+
+    const init: RequestInit = {
+    };
+    if (opts?.lastModified) {
+      init.headers = {'if-modified-since': opts.lastModified};
+    }
+    if (opts?.etag) {
+      init.headers = {'if-none-match': opts.etag};
     }
 
-    if (!useLocal) {
-      const init: RequestInit = {
-      };
-      if (file?.date) {
-        init.headers = {'if-modified-since': file.date};
-      }
-      if (this.#opts.alwaysCheck) {
-        init.cache = 'no-cache';
-      }
-      this.#verbose('Checking "%s"', u);
-      const res = await fetch(u, init);
-      file = {
-        etag: res.headers.get('etag') ?? '---000---',
-        date: res.headers.get('last-modified') ?? new Date().toUTCString(),
-      };
+    this.#log.debug(`Checking "%s" with headers: ${init.headers}`, u);
+    const res = await fetch(u, init);
+    const info: FileInfo = {
+      etag: res.headers.get('etag') ?? BAD_ETAG,
+      lastModified: res.headers.get('last-modified') ?? new Date().toUTCString(),
+      status: res.status,
+      text: undefined,
+      parsed: undefined,
+    };
 
-      if (res.status === 304) {
-        await this.#db.setFile(name, file);
-        return this.#getLocal(name);
-      }
-
-      if (res.status === 200) {
-        const txt = await res.text();
-        await this.#setLocal(name, txt);
-        await this.#db.setFile(name, file);
-        return txt;
-      }
-
-      this.#verbose('Invalid HTTP status: %d', res.status);
+    switch (res.status) {
+      case 304:
+        info.text = await this.#getLocal(name);
+        break;
+      case 200:
+        info.text = await res.text();
+        await this.#setLocal(name, info.text);
+        break;
+      default:
+        this.#log.error('Unexpected HTTP status: %d', info.status);
+        throw new Error(`HTTP Status ${info.status}`);
     }
-
-    return this.#getLocal(name);
+    return info;
   }
 
   #fileName(name: string): string {
@@ -180,30 +235,6 @@ export class CacheDir {
 
   async #setLocal(name: string, text: string): Promise<void> {
     const fn = this.#fileName(name);
-    const dir = path.dirname(fn);
-    try {
-      await fs.mkdir(dir);
-    } catch (e) {
-      if (!errCode(e, 'EEXIST')) {
-        throw e;
-      }
-    }
-
     return fs.writeFile(fn, text, 'utf8');
-  }
-
-  #validDate(d?: Date): boolean {
-    if (this.#opts.alwaysCheck || !d) {
-      return false;
-    }
-    const dt = d.getTime() + this.#opts.validMS;
-    return dt > new Date().getTime();
-  }
-
-  #verbose(...args: any[]): void {
-    if (this.#opts.verbose) {
-      // eslint-disable-next-line no-console
-      console.error(...args);
-    }
   }
 }

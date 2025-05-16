@@ -4,9 +4,8 @@
     "lcov"
   ],
   "exclude": [
-    "**/test/**",
-    "**/tools/**",
-    "**/node_modules/**",
+    "node_modules/**",
+    "test/**",
     ".hostlocal.js"
   ]
 }
