@@ -8,6 +8,7 @@ export default defineConfig({
     'src/db.ts',
     'src/ucd.js',
     'src/ucdFile.ts',
+    'src/utils.ts',
   ],
   format: 'esm',
   minify: true,

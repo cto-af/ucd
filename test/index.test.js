@@ -56,7 +56,7 @@ test('create', async() => {
 
   await assert.rejects(() => CacheDir.create({cacheDir: 0}));
   await assert.rejects(() => CacheDir.create({
-    cacheDir: new URL(import.meta.url)
+    cacheDir: new URL(import.meta.url),
   }));
 });
 
@@ -65,7 +65,7 @@ test('version', async() => {
     cacheDir,
     prefix,
   });
-  const ver = await cd.fetchUCDversion();
+  const ver = await cd.fetchUCDversion({CI: false});
   delete ver.lastModified;
   delete ver.etag;
 
@@ -80,7 +80,7 @@ test('version', async() => {
   });
 
   await assert.rejects(() => badCd.fetchUCDversion({CI: true}));
-  await assert.rejects(() => badCd.fetchUCDversion());
+  await assert.rejects(() => badCd.fetchUCDversion({CI: false}));
 
   const invalidCd = await CacheDir.create({
     cacheDir: join(cacheDir, 'BAD'),
@@ -103,11 +103,12 @@ test('NormalizationCorrections', async() => {
     prefix,
   });
   assert(cd);
-  const res = await cd.parse('NormalizationCorrections.txt');
+  const res = await cd.parse('NormalizationCorrections.txt', {CI: false});
   assert(res);
   const res2 = await cd.parse('NormalizationCorrections.txt', {
     lastModified: res.lastModified,
     etag: res.etag,
+    CI: false,
   });
   assert.equal(res2.status, 304);
   const res3 = await cd.parse('NormalizationCorrections.txt', {

@@ -3,10 +3,12 @@ import * as path from 'node:path';
 import type {CodePoints, Entry, Field, FieldDef, Points, Range, UCDFile} from './ucdFile.js';
 import {type Logger, getLog} from '@cto.af/log';
 import {Buffer} from 'node:buffer';
+import type {FetchOptions} from './types.js';
 import type {PathLike} from 'node:fs';
 import assert from 'node:assert';
 import {errCode} from '@cto.af/utils';
 import {fileURLToPath} from 'node:url';
+import {isCI} from './utils.js';
 import {parse as ucdParse} from './ucd.js';
 
 const UCD_PREFIX = 'https://www.unicode.org/Public/UCD/latest/ucd/';
@@ -15,6 +17,7 @@ const BAD_ETAG = '---000---';
 export type {
   CodePoints,
   Entry,
+  FetchOptions,
   Field,
   FieldDef,
   Points, Range,
@@ -61,27 +64,6 @@ export interface FileInfo {
   status: number;
   text: string | undefined;
   parsed: UCDFile | undefined;
-}
-
-export interface FetchOptions {
-  etag?: string;
-  lastModified?: string;
-  CI?: boolean;
-}
-
-function isCI(opts?: FetchOptions): boolean {
-  const {env} = process;
-  return Boolean(
-    // Override for testing, so we don't have to much with process.env
-    opts?.CI ||
-    // Travis CI, CircleCI, Cirrus CI, Gitlab CI, Appveyor, CodeShip, dsari,
-    // GitHub Actions
-    env.CI ||
-    env.CONTINUOUS_INTEGRATION || // Travis CI, Cirrus CI
-    env.BUILD_NUMBER || // Jenkins, TeamCity
-    env.RUN_ID || // TaskCluster, dsari
-    false
-  );
 }
 
 function normalizeCacheDir(cacheDir?: PathLike): string {
