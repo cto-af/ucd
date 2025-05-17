@@ -29,6 +29,8 @@ jobs:
           cache: 'pnpm'
       - name: Dependencies
         run: pnpm install -r
+      - name: Lint
+        run: npm run lint
       - name: Test ${{ matrix.node-version }} ${{ matrix.platform }}
         run: npm run test
       - name: Docs

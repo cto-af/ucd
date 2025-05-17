@@ -75,12 +75,20 @@ comment
   = "#" _ @to_end
 
 to_end
-  = $(!EOL .)*
+  = $(!CRLF .)*
 
 entries
   = entry+
 
 entry
+  = entry_derived
+  / entry_missing
+  / entry_segment
+  / entry_fields
+  / CEOL
+  / comment // Some files end with comment but no newline
+
+entry_derived
   = "#" _ derived:("Derived" _)? "Property:"i _ property:word _ comment:to_end {
     const res = {
       fields: [],
@@ -92,7 +100,9 @@ entry
     }
     results.entries.push(res);
   }
-  / "#" _ "@missing:" _ fields:fields comment:CEOL {
+
+entry_missing
+  = "#" _ "@missing:" _ fields:fields comment:CEOL {
     const res = {fields, missing: true};
     if (comment) {
       res.comment = comment;
@@ -102,10 +112,14 @@ entry
     }
     results.entries.push(res);
   }
-  / "@" word:word CEOL {
+
+entry_segment
+  = "@" word:word CEOL {
     segment = word;
   }
-  / fields:fields comment:CEOL {
+
+entry_fields
+  = fields:fields comment:CEOL {
     const res = {fields};
     if (comment) {
       res.comment = comment;
@@ -115,23 +129,29 @@ entry
     }
     results.entries.push(res);
   }
-  / CEOL
-  / comment // Some files end with comment but no newline
-
 
 fields
   = (_ @field)|2.., SEMI _|
 
 field
+  = field_range
+  / field_points
+  / field_value
+
+field_range
   = first:point ".." last:point _ &SEMI { return {range: [first, last]} }
-  / prefix:("<" @word ">" _)? points:point|1.., _| _ &SEMI {
+
+field_points
+  = prefix:("<" @word ">" _)? points:point|1.., _| _ &SEMI {
       const res = {points};
       if (prefix) {
         res.prefix = prefix;
       }
       return res;
     }
-  / _ val:$[^\r\n#;]* { return val.trimEnd() || null; }
+
+field_value
+  = _ val:$[^\r\n#;]* { return val.trimEnd() || null; }
 
 point
   = num:$HEX|4..6| { return parseInt(num, 16) }
