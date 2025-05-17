@@ -86,7 +86,7 @@ test('version', async() => {
     cacheDir: join(cacheDir, 'BAD'),
     prefix: `${prefix}bad/`,
   });
-  await assert.rejects(() => invalidCd.fetchUCDversion());
+  await assert.rejects(() => invalidCd.fetchUCDversion({CI: false}));
 });
 
 test('Buffer cacheDir', async() => {
