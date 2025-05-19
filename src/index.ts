@@ -174,11 +174,15 @@ export class UCD {
 
     const init: RequestInit = {
     };
+    const headers: [string, string][] = [];
     if (opts?.lastModified) {
-      init.headers = {'if-modified-since': opts.lastModified};
+      headers.push(['if-modified-since', opts.lastModified]);
     }
     if (opts?.etag) {
-      init.headers = {'if-none-match': opts.etag};
+      headers.push(['if-none-match', opts.etag]);
+    }
+    if (headers.length) {
+      init.headers = headers;
     }
 
     this.#log.debug('Checking "%s" with headers: %o', u, init.headers);
