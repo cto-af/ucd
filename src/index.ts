@@ -2,13 +2,12 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import type {CodePoints, Entry, Field, FieldDef, Points, Range, UCDFile} from './ucdFile.js';
 import {type Logger, getLog} from '@cto.af/log';
+import {errCode, isCI} from '@cto.af/utils';
 import {Buffer} from 'node:buffer';
 import type {FetchOptions} from './types.js';
 import type {PathLike} from 'node:fs';
 import assert from 'node:assert';
-import {errCode} from '@cto.af/utils';
 import {fileURLToPath} from 'node:url';
-import {isCI} from './utils.js';
 import {parse as ucdParse} from './ucd.js';
 
 const UCD_PREFIX = 'https://www.unicode.org/Public/UCD/latest/ucd/';
@@ -80,7 +79,7 @@ function normalizeCacheDir(cacheDir?: PathLike): string {
   throw new TypeError(`Invalid cacheDir: ${cacheDir}`);
 }
 
-export class CacheDir {
+export class UCD {
   #opts: RequiredUCDoptions;
   #log: Logger;
 
@@ -95,8 +94,8 @@ export class CacheDir {
     });
   }
 
-  public static async create(options: UCDoptions = {}): Promise<CacheDir> {
-    const cd = new CacheDir(options);
+  public static async create(options: UCDoptions = {}): Promise<UCD> {
+    const cd = new UCD(options);
     return cd.init();
   }
 
