@@ -1,6 +1,6 @@
 {
   "name": "@cto.af/ucd",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "decription": "Retrieve, cache, and parse current Unicode Character Database files.",
   "main": "lib/index.js",
   "type": "module",
