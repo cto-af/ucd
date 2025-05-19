@@ -181,7 +181,7 @@ export class UCD {
       init.headers = {'if-none-match': opts.etag};
     }
 
-    this.#log.debug(`Checking "%s" with headers: ${init.headers}`, u);
+    this.#log.debug('Checking "%s" with headers: %o', u, init.headers);
     const res = await fetch(u, init);
     const info: FileInfo = {
       etag: res.headers.get('etag') ?? BAD_ETAG,
