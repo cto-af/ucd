@@ -1,7 +1,7 @@
 import {after, before, test} from 'node:test';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 import {Buffer} from 'node:buffer';
-import {CacheDir} from '../lib/index.js';
+import {UCD} from '../lib/index.js';
 import assert from 'node:assert';
 import {createCA} from '@cto.af/ca';
 import fs from 'node:fs/promises';
@@ -45,23 +45,23 @@ after(async t => {
 });
 
 test('create', async() => {
-  await assert.doesNotReject(() => CacheDir.create());
-  await assert.doesNotReject(() => CacheDir.create({
+  await assert.doesNotReject(() => UCD.create());
+  await assert.doesNotReject(() => UCD.create({
     cacheDir: null, verbose: true,
   }));
-  const cd = await CacheDir.create({
+  const cd = await UCD.create({
     cacheDir: join(cacheDir, 'TEMP', 'DEEP'),
   });
   await cd.rmDir();
 
-  await assert.rejects(() => CacheDir.create({cacheDir: 0}));
-  await assert.rejects(() => CacheDir.create({
+  await assert.rejects(() => UCD.create({cacheDir: 0}));
+  await assert.rejects(() => UCD.create({
     cacheDir: new URL(import.meta.url),
   }));
 });
 
 test('version', async() => {
-  const cd = await CacheDir.create({
+  const cd = await UCD.create({
     cacheDir,
     prefix,
   });
@@ -74,7 +74,7 @@ test('version', async() => {
     date: new Date('2023-08-28'),
   });
 
-  const badCd = await CacheDir.create({
+  const badCd = await UCD.create({
     cacheDir: join(cacheDir, 'BAD'),
     prefix: `${prefix}BAD_DIR/`,
   });
@@ -82,7 +82,7 @@ test('version', async() => {
   await assert.rejects(() => badCd.fetchUCDversion({CI: true}));
   await assert.rejects(() => badCd.fetchUCDversion({CI: false}));
 
-  const invalidCd = await CacheDir.create({
+  const invalidCd = await UCD.create({
     cacheDir: join(cacheDir, 'BAD'),
     prefix: `${prefix}bad/`,
   });
@@ -90,7 +90,7 @@ test('version', async() => {
 });
 
 test('Buffer cacheDir', async() => {
-  const cd = await CacheDir.create({
+  const cd = await UCD.create({
     cacheDir: Buffer.from(cacheDir),
     prefix,
   });
@@ -98,7 +98,7 @@ test('Buffer cacheDir', async() => {
 });
 
 test('NormalizationCorrections', async() => {
-  const cd = await CacheDir.create({
+  const cd = await UCD.create({
     cacheDir: pathToFileURL(cacheDir),
     prefix,
   });

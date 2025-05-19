@@ -15,7 +15,8 @@ Full [API documentation](http://cto-af.github.io/ucd/) is available.
 Example:
 
 ```js
-const cd = await CacheDir.create({cacheDir: 'my_ucd_cache_directory'});
+import {UCD} from '@cto.af/ucd';
+const cd = await UCD.create({cacheDir: 'my_ucd_cache_directory'});
 const scripts = await cd.parse('Scripts.txt');
 
 for (const {fields} of scripts.parsed.entries) {
