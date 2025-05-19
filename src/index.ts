@@ -179,7 +179,9 @@ export class UCD {
       headers.push(['if-modified-since', opts.lastModified]);
     }
     if (opts?.etag) {
-      headers.push(['if-none-match', opts.etag]);
+      // Apache bug.  Get gzip in etag, but can't send it back.
+      const nonGzip = opts.etag.replace(/-gzip"$/, '"');
+      headers.push(['if-none-match', nonGzip]);
     }
     if (headers.length) {
       init.headers = headers;
