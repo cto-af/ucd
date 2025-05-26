@@ -19,7 +19,6 @@ const server = await hostLocal(root, {
 });
 const prefix = await server.start();
 const cacheDir = await fs.mkdtemp(join(tmpdir(), 'ucd-index-'));
-console.log({prefix})
 before(t => {
   const origCsC = tls.createSecureContext;
   t.mock.method(tls, 'createSecureContext', options => {
