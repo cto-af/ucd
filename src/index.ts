@@ -6,7 +6,6 @@ import {errCode, isCI} from '@cto.af/utils';
 import {Buffer} from 'node:buffer';
 import type {FetchOptions} from './types.js';
 import type {PathLike} from 'node:fs';
-import assert from 'node:assert';
 import {fileURLToPath} from 'node:url';
 import {parse as ucdParse} from './ucd.js';
 
@@ -30,24 +29,48 @@ Goals:
 */
 
 export interface UCDoptions {
+  /**
+   * Where to cache downloaded database files.
+   */
   cacheDir?: PathLike;
-  prefix?: string;
-  verbose?: boolean;
+
+  /**
+   * Parse the file, even if you get a 304 from the web server. Changes the
+   * status to 200 in this case.
+   */
+  alwaysParse?: boolean;
+
+  /**
+   * Check for new version, even if we are in CI.  Mostly useful for testing.
+   */
   checkinCI?: boolean;
+
+  /**
+   * URL prefix for Unicode Database.  Filename is appended to this to get
+   * full URL.
+   */
+  prefix?: string;
+
+  /**
+   * Enable verbose logging to stdout.
+   */
+  verbose?: boolean;
 }
 
 interface RequiredUCDoptions {
   cacheDir: string; // Normalized from PathLike
+  alwaysParse: boolean;
+  checkinCI: boolean;
   prefix: string;
   verbose: boolean;
-  checkinCI: boolean;
 }
 
 const DEFAULT_UCD_OPTIONS: RequiredUCDoptions = {
   cacheDir: process.cwd(),
+  alwaysParse: false,
+  checkinCI: false,
   prefix: UCD_PREFIX,
   verbose: false,
-  checkinCI: false,
 };
 
 export interface UCDversion {
@@ -57,12 +80,29 @@ export interface UCDversion {
   etag: string;
 }
 
-export interface FileInfo {
+export interface FailRead {
+  status: number;
   etag: string;
   lastModified: string;
-  status: number;
-  text: string | undefined;
-  parsed: UCDFile | undefined;
+}
+
+export interface SuccessRead extends FailRead {
+  status: 200;
+  text: string;
+}
+
+export type FileInfo = FailRead extends SuccessRead ?
+  SuccessRead :
+  FailRead;
+
+export interface SuccessParsedFileInfo extends SuccessRead {
+  parsed: UCDFile;
+}
+
+export type ParsedFileInfo = SuccessParsedFileInfo | FailRead;
+
+export function isSuccess(fi: FileInfo): fi is SuccessParsedFileInfo {
+  return fi.status === 200;
 }
 
 function normalizeCacheDir(cacheDir?: PathLike): string {
@@ -121,8 +161,11 @@ export class UCD {
   }
 
   public async fetchUCDversion(opts?: FetchOptions): Promise<UCDversion> {
-    const {text, lastModified, etag} = await this.#getFile('ReadMe.txt', opts);
-    assert(text);
+    const fi = await this.#getFile('ReadMe.txt', opts);
+    if (!isSuccess(fi)) {
+      throw new Error('Version not changed');
+    }
+    const {text, lastModified, etag} = fi;
 
     const matchD = text.match(/^# Date: (?<date>\d+-\d+-\d+)/m);
     const matchV = text.match(/Version (?<version>\d+\.\d+\.\d+) of/i);
@@ -137,9 +180,12 @@ export class UCD {
     };
   }
 
-  public async parse(name: string, opts?: FetchOptions): Promise<FileInfo> {
+  public async parse(
+    name: string,
+    opts?: FetchOptions
+  ): Promise<ParsedFileInfo> {
     const info = await this.#getFile(name, opts);
-    if ((info.status === 200) && (typeof info.text === 'string')) {
+    if (isSuccess(info)) {
       info.parsed = ucdParse(info.text);
     }
     return info;
@@ -160,56 +206,70 @@ export class UCD {
     name: string,
     opts?: FetchOptions
   ): Promise<FileInfo> {
+    let text = '';
+    let status = 500;
+    let etag = BAD_ETAG;
+    let lastModified = new Date().toUTCString();
+
+    // Never fetch in CI unless forced to.
     if (isCI(opts) && !this.#opts.checkinCI) {
-      const text = await this.#getLocal(name);
-      return {
-        etag: opts?.etag ?? BAD_ETAG,
-        lastModified: opts?.lastModified ?? new Date().toUTCString(),
-        status: 304,
-        text,
-        parsed: undefined,
+      status = 304;
+    } else {
+      const u = new URL(name, this.#opts.prefix);
+
+      const init: RequestInit = {
       };
-    }
-    const u = new URL(name, this.#opts.prefix);
+      const headers: [string, string][] = [];
+      if (opts?.lastModified) {
+        headers.push(['if-modified-since', opts.lastModified]);
+      }
+      if (opts?.etag) {
+        // Apache bug.  Get gzip in etag, but can't send it back.
+        const nonGzip = opts.etag.replace(/-gzip"$/, '"');
+        headers.push(['if-none-match', nonGzip]);
+      }
+      if (headers.length) {
+        init.headers = headers;
+      }
 
-    const init: RequestInit = {
+      this.#log.debug('Checking "%s" with headers: %o', u, init.headers);
+      const res = await fetch(u, init);
+      ({status} = res);
+      etag = res.headers.get('etag') ?? etag;
+      lastModified = res.headers.get('last-modified') ?? lastModified;
+      switch (res.status) {
+        case 200:
+          text = await res.text();
+          await this.#setLocal(name, text);
+          break;
+        case 304:
+          break;
+        default:
+          this.#log.error('Unexpected HTTP status: %d', status);
+          throw new Error(`HTTP Status ${status}`);
+      }
+    }
+
+    if (status === 304) {
+      if (this.#opts.alwaysParse) {
+        text = await this.#getLocal(name);
+        status = 200;
+      } else {
+        return {
+          etag: opts?.etag ?? BAD_ETAG,
+          lastModified: opts?.lastModified ?? new Date().toUTCString(),
+          status,
+        };
+      }
+    }
+
+    const success: SuccessRead = {
+      etag,
+      lastModified,
+      status: 200,
+      text,
     };
-    const headers: [string, string][] = [];
-    if (opts?.lastModified) {
-      headers.push(['if-modified-since', opts.lastModified]);
-    }
-    if (opts?.etag) {
-      // Apache bug.  Get gzip in etag, but can't send it back.
-      const nonGzip = opts.etag.replace(/-gzip"$/, '"');
-      headers.push(['if-none-match', nonGzip]);
-    }
-    if (headers.length) {
-      init.headers = headers;
-    }
-
-    this.#log.debug('Checking "%s" with headers: %o', u, init.headers);
-    const res = await fetch(u, init);
-    const info: FileInfo = {
-      etag: res.headers.get('etag') ?? BAD_ETAG,
-      lastModified: res.headers.get('last-modified') ?? new Date().toUTCString(),
-      status: res.status,
-      text: undefined,
-      parsed: undefined,
-    };
-
-    switch (res.status) {
-      case 304:
-        info.text = await this.#getLocal(name);
-        break;
-      case 200:
-        info.text = await res.text();
-        await this.#setLocal(name, info.text);
-        break;
-      default:
-        this.#log.error('Unexpected HTTP status: %d', info.status);
-        throw new Error(`HTTP Status ${info.status}`);
-    }
-    return info;
+    return success;
   }
 
   #fileName(name: string): string {

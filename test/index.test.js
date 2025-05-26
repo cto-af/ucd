@@ -3,7 +3,6 @@ import {fileURLToPath, pathToFileURL} from 'node:url';
 import {Buffer} from 'node:buffer';
 import {UCD} from '../lib/index.js';
 import assert from 'node:assert';
-import {createCA} from '@cto.af/ca';
 import fs from 'node:fs/promises';
 import {hostLocal} from 'hostlocal';
 import {join} from 'node:path';
@@ -16,24 +15,17 @@ const server = await hostLocal(root, {
   port: 0,
   open: false,
   prefix: 'ucd',
-  logLevel: -2,
+  logLevel: 2,
 });
-const prefix = (await new Promise((resolve, reject) => {
-  server.on('error', reject);
-  server.on('listen', resolve);
-  server.start();
-})).toString();
-
+const prefix = await server.start();
 const cacheDir = await fs.mkdtemp(join(tmpdir(), 'ucd-index-'));
-
-before(async t => {
-  // Trust our own CA.
-  const {cert} = await createCA({noKey: true});
+console.log({prefix})
+before(t => {
   const origCsC = tls.createSecureContext;
   t.mock.method(tls, 'createSecureContext', options => {
-    const res = origCsC(options);
-    res.context.addCACert(cert);
-    return res;
+    const secureContext = origCsC(options);
+    secureContext.context.addCACert(server.caCert);
+    return secureContext;
   });
 });
 after(async t => {
