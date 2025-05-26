@@ -253,7 +253,6 @@ export class UCD {
     if (status === 304) {
       if (this.#opts.alwaysParse) {
         text = await this.#getLocal(name);
-        status = 200;
       } else {
         return {
           etag: opts?.etag ?? BAD_ETAG,

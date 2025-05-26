@@ -107,3 +107,17 @@ test('NormalizationCorrections', async() => {
   });
   assert.equal(res3.status, 304);
 });
+
+test('alwaysParse', async() => {
+  const cd = await UCD.create({
+    cacheDir: pathToFileURL(cacheDir),
+    prefix,
+    alwaysParse: true,
+  });
+  const res = await cd.parse('NormalizationCorrections.txt', {
+    CI: true,
+  });
+  assert.equal(res.status, 200);
+  assert(res.parsed);
+});
+
