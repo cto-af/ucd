@@ -232,7 +232,7 @@ export class UCD {
         init.headers = headers;
       }
 
-      this.#log.debug('Checking "%s" with headers: %o', u, init.headers);
+      this.#log.debug('Checking "%s" with headers: %o', u, init.headers ?? {});
       const res = await fetch(u, init);
       ({status} = res);
       etag = res.headers.get('etag') ?? etag;
@@ -252,6 +252,7 @@ export class UCD {
 
     if (status === 304) {
       if (this.#opts.alwaysParse) {
+        this.#log.debug('Switching 304 to 200 because alwaysParse');
         text = await this.#getLocal(name);
       } else {
         return {
@@ -276,11 +277,16 @@ export class UCD {
   }
 
   #getLocal(name: string): Promise<string> {
-    return fs.readFile(this.#fileName(name), 'utf8');
+    const fn = this.#fileName(name);
+    this.#log.debug('Reading "%s"', fn);
+    return fs.readFile(fn, 'utf8');
   }
 
   async #setLocal(name: string, text: string): Promise<void> {
     const fn = this.#fileName(name);
+    this.#log.debug('Writing "%s"', fn);
+    const dir = path.dirname(fn);
+    await fs.mkdir(dir, {recursive: true});
     return fs.writeFile(fn, text, 'utf8');
   }
 }

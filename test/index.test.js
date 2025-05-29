@@ -121,3 +121,14 @@ test('alwaysParse', async() => {
   assert(res.parsed);
 });
 
+test('creates directory', async() => {
+  const cd = await UCD.create({
+    cacheDir: pathToFileURL(cacheDir),
+    prefix,
+  });
+  const res = await cd.parse('emoji/emoji-data.txt', {
+    CI: false,
+  });
+  assert.equal(res.status, 200);
+  assert(res.parsed);
+});
