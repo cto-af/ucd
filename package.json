@@ -36,24 +36,24 @@
     "start": "hostlocal"
   },
   "dependencies": {
-    "@cto.af/log": "1.0.0",
-    "@cto.af/utils": "1.2.0"
+    "@cto.af/log": "1.0.1",
+    "@cto.af/utils": "1.2.1"
   },
   "devDependencies": {
-    "@cto.af/eslint-config": "6.0.4",
-    "@peggyjs/coverage": "2.0.1",
-    "@types/node": "22.15.24",
+    "@cto.af/eslint-config": "6.0.9",
+    "@peggyjs/coverage": "2.0.3",
+    "@types/node": "24.0.3",
     "c8": "10.1.3",
     "enhanced-resolve": "5.18.1",
-    "eslint": "9.27.0",
-    "hostlocal": "2.1.2",
-    "peggy": "5.0.2",
+    "eslint": "9.29.0",
+    "hostlocal": "2.1.3",
+    "peggy": "5.0.4",
     "tsup": "8.5.0",
     "typedoc": "0.28.5",
     "typescript": "5.8.3",
-    "typescript-eslint": "8.33.0"
+    "typescript-eslint": "8.34.1"
   },
-  "packageManager": "pnpm@10.11.0",
+  "packageManager": "pnpm@10.12.1",
   "engines": {
     "node": ">=20"
   }
