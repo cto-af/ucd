@@ -16,7 +16,7 @@ test('ucd parser', () => {
   assert.equal(count, 1);
 });
 
-test('ucd parser coverage', async() => {
+test('ucd parser coverage', async () => {
   const {total, valid, invalid} = await testPeggy(parserURL, [
     {
       validInput: '0000;<control>;Cc;0;BN\n',
