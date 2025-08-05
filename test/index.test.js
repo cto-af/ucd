@@ -35,7 +35,7 @@ after(async t => {
   await fs.rm(cacheDir, {recursive: true});
 });
 
-test('create', async() => {
+test('create', async () => {
   await assert.doesNotReject(() => UCD.create());
   await assert.doesNotReject(() => UCD.create({
     cacheDir: null, verbose: true,
@@ -51,7 +51,7 @@ test('create', async() => {
   }));
 });
 
-test('version', async() => {
+test('version', async () => {
   const cd = await UCD.create({
     cacheDir,
     prefix,
@@ -80,7 +80,7 @@ test('version', async() => {
   await assert.rejects(() => invalidCd.fetchUCDversion({CI: false}));
 });
 
-test('Buffer cacheDir', async() => {
+test('Buffer cacheDir', async () => {
   const cd = await UCD.create({
     cacheDir: Buffer.from(cacheDir),
     prefix,
@@ -88,7 +88,7 @@ test('Buffer cacheDir', async() => {
   assert(cd);
 });
 
-test('NormalizationCorrections', async() => {
+test('NormalizationCorrections', async () => {
   const cd = await UCD.create({
     cacheDir: pathToFileURL(cacheDir),
     prefix,
@@ -108,7 +108,7 @@ test('NormalizationCorrections', async() => {
   assert.equal(res3.status, 304);
 });
 
-test('alwaysParse', async() => {
+test('alwaysParse', async () => {
   const cd = await UCD.create({
     cacheDir: pathToFileURL(cacheDir),
     prefix,
@@ -121,7 +121,7 @@ test('alwaysParse', async() => {
   assert(res.parsed);
 });
 
-test('creates directory', async() => {
+test('creates directory', async () => {
   const cd = await UCD.create({
     cacheDir: pathToFileURL(cacheDir),
     prefix,
