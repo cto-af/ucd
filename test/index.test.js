@@ -16,6 +16,7 @@ const server = await hostLocal(root, {
   open: false,
   prefix: 'ucd',
   logLevel: 2,
+  temp: true,
 });
 const prefix = await server.start();
 const cacheDir = await fs.mkdtemp(join(tmpdir(), 'ucd-index-'));
