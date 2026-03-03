@@ -9,3 +9,5 @@ src/ucd.js
 test/ucd/
 tools/ucd/
 tsconfig.tsbuildinfo
+.DS_Store
+.pnpm-store/
