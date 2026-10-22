@@ -2,7 +2,7 @@ import {after, before, test} from 'node:test';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 import {Buffer} from 'node:buffer';
 import {UCD} from '../lib/index.js';
-import assert from 'node:assert';
+import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import {hostLocal} from 'hostlocal';
 import {join} from 'node:path';
@@ -62,8 +62,8 @@ test('version', async () => {
   delete ver.etag;
 
   assert.deepEqual(ver, {
-    version: '15.1.0',
-    date: new Date('2023-08-28'),
+    version: '18.0.0',
+    date: new Date('2026'),
   });
 
   const badCd = await UCD.create({

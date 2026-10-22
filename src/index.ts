@@ -167,13 +167,13 @@ export class UCD {
     }
     const {text, lastModified, etag} = fi;
 
-    const matchD = text.match(/^# Date: (?<date>\d+-\d+-\d+)/m);
+    const matchD = text.match(/^(?:# Date: (?<oldDate>\d+-\d+-\d+))|(?:©\s+(?<date>\d+))/m);
     const matchV = text.match(/Version (?<version>\d+\.\d+\.\d+) of/i);
     if (!matchD?.groups || !matchV?.groups) {
       throw new Error('Invalid ReadMe');
     }
     return {
-      date: new Date(matchD.groups.date),
+      date: new Date(matchD.groups.date ?? matchD.groups.oldDate),
       version: matchV.groups.version,
       lastModified,
       etag,

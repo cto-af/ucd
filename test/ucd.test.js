@@ -1,9 +1,9 @@
-import assert from 'node:assert';
+import assert from 'node:assert/strict';
 import {parse} from '../lib/ucd.js';
 import {test} from 'node:test';
 import {testPeggy} from '@peggyjs/coverage';
 
-const parserURL = new URL('../src/ucd.js', import.meta.url);
+const parserURL = new URL('../lib/ucd.js', import.meta.url);
 test('ucd parser', () => {
   const f = parse(`
 0000;<control>;Cc;0;BN;;;;;N;NULL;;;;
