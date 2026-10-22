@@ -1,2 +1,11 @@
-ignoredBuiltDependencies:
-  - esbuild
+allowBuilds:
+  esbuild: true
+auditConfig:
+  ignoreGhsas:
+    - GHSA-vfj7-8cjw-p6xm
+minimumReleaseAgeExclude:
+    - "@cto.af/ca@4.0.2"
+    - hostlocal@3.0.1
+overrides:
+  "tsup@8.5.1>esbuild": 0.28.2
+  "bundle-require@5.1.0>esbuild": 0.28.2
