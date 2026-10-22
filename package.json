@@ -31,7 +31,7 @@
     "prebuild": "npm run parser",
     "build": "tsc",
     "postbuild": "cpy --flat src/ucd.js src/ucd.d.ts lib",
-    "pretest": "tsc --inlineSourceMap",
+    "pretest": "npm run build -- --inlineSourceMap",
     "test": "c8 node --test --enable-source-maps",
     "posttest": "tsc",
     "start": "hostlocal",
